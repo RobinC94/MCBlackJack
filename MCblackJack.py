@@ -13,17 +13,25 @@ env = gym.make("Blackjack-v0")
 
 
 def set_strategy_with_limit(score, n=18):
-    if score > 18:
+    if score > n:
         return 1
     else:
         return 0
 
 
-def generate_episode_with_strategy(bj_env, set_strategy):
+def set_strategy_with_limit_stochastic(score, n=18):
+    if score > n:
+        probs = [0.8, 0.2]
+    else:
+        probs = [0.2, 0.8]
+    return np.random.choice(np.arange(2), p=probs)
+
+
+def generate_episode_with_strategy(bj_env, strategy):
     episode = []
     state = bj_env.reset()
     while True:
-        action = int(set_strategy(state[0]))
+        action = int(strategy(state[0]))
         next_state, reward, done, info = bj_env.step(action)
         episode.append((state, action, reward))
         state = next_state
@@ -32,16 +40,32 @@ def generate_episode_with_strategy(bj_env, set_strategy):
     return episode
 
 
-def mc_predict_v(bj_env, episodes, generate_episodes, gamma=1.0):
+def mc_predict_v(bj_env, episodes, generate_episodes, strategy, gamma=1.0):
     returns = defaultdict(list)
     for i_episode in tqdm(range(episodes)):
-        episode = generate_episodes(env, set_strategy_with_limit(18))
+        episode = generate_episodes(bj_env, strategy)
         states, actions, rewards = zip(*episode)
         discount = np.array([gamma**i for i in range(len(rewards)+1)])
         for i, state in enumerate(states):
             returns[state].append(sum(rewards[i:]*discount[:-(1+i)]))
     V = {k: np.mean(v) for k, v, in returns.items()}
     return V
+
+
+def mc_predict_q(bj_env, episodes, generate_episodes, strategy, gamma=1.0):
+    returns = defaultdict(lambda: np.zeros(bj_env.action_space.n))
+    N = defaultdict(lambda: np.zeros(bj_env.action_space.n))
+    Q = defaultdict(lambda: np.zeros(bj_env.action_space.n))
+
+    for i_episode in tqdm(range(1, episodes+1)):
+        episode = generate_episodes(bj_env, strategy)
+        states, actions, rewards = zip(*episode)
+        discounts = np.array([gamma**i for i in range(len(rewards)+1)])
+        for i, state in enumerate(states):
+            returns[state][actions[i]] += sum(rewards[i:]*discounts[:-(1+i)])
+            N[state][actions[i]] += 1
+            Q[state][actions[i]] += returns[state][actions[i]] / N[state][actions[i]]
+    return Q
 
 
 def plot_value_function(Q_table):
@@ -67,17 +91,11 @@ def plot_value_function(Q_table):
 
 
 if __name__ == '__main__':
-    V = mc_predict_v(env, 500000, generate_episode_with_strategy)
+    V = mc_predict_v(env, 50000, generate_episode_with_strategy, set_strategy_with_limit)
     plot_value_function(V)
 
+    # Q = mc_predict_q(env, 50000, generate_episode_with_strategy, set_strategy_with_limit_stochastic)
 
-# for i in range(3):
-#     state = env.reset()
-#     while True:
-#         print(state)
-#         action = env.action_space.sample()
-#         state, reward, done, info = env.step(action)
-#         if done:
-#             print("End game! Reward: ", reward)
-#             print("You win!") if reward>0 else print("You lose! ")
-#             break
+    # V_to_plot = dict(((k, (k[0]>18)*(np.dot([0.8, 0.2], v)) + (k[0]<=18)*np.dot([0.2, 0.8], v))) for k, v in Q.items())
+    # plot_value_function(V_to_plot)
+
