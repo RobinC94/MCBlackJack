@@ -57,14 +57,15 @@ def mc_predict_q(bj_env, episodes, generate_episodes, strategy, gamma=1.0):
     N = defaultdict(lambda: np.zeros(bj_env.action_space.n))
     Q = defaultdict(lambda: np.zeros(bj_env.action_space.n))
 
-    for i_episode in tqdm(range(1, episodes+1)):
+    for i_episode in tqdm(range(episodes)):
         episode = generate_episodes(bj_env, strategy)
         states, actions, rewards = zip(*episode)
         discounts = np.array([gamma**i for i in range(len(rewards)+1)])
         for i, state in enumerate(states):
             returns[state][actions[i]] += sum(rewards[i:]*discounts[:-(1+i)])
             N[state][actions[i]] += 1
-            Q[state][actions[i]] += returns[state][actions[i]] / N[state][actions[i]]
+        for state in returns.keys():
+            Q[state] = returns[state] / N[state]
     return Q
 
 
@@ -91,11 +92,10 @@ def plot_value_function(Q_table):
 
 
 if __name__ == '__main__':
-    V = mc_predict_v(env, 50000, generate_episode_with_strategy, set_strategy_with_limit)
-    plot_value_function(V)
+    #V = mc_predict_v(env, 50000, generate_episode_with_strategy, set_strategy_with_limit)
+    #plot_value_function(V)
 
-    # Q = mc_predict_q(env, 50000, generate_episode_with_strategy, set_strategy_with_limit_stochastic)
-
-    # V_to_plot = dict(((k, (k[0]>18)*(np.dot([0.8, 0.2], v)) + (k[0]<=18)*np.dot([0.2, 0.8], v))) for k, v in Q.items())
-    # plot_value_function(V_to_plot)
+    Q = mc_predict_q(env, 50000, generate_episode_with_strategy, set_strategy_with_limit_stochastic)
+    V_to_plot = dict(((k, (k[0]>18)*(np.dot([0.8, 0.2], v)) + (k[0]<=18)*np.dot([0.2, 0.8], v))) for k, v in Q.items())
+    plot_value_function(V_to_plot)
 
